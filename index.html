@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>விவசாய AI உதவியாளர்</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: linear-gradient(to right, #f1f8e9, #e8f5e9);
+      margin: 0;
+    }
+    .chat-container {
+      max-width: 650px;
+      margin: 40px auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 15px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    }
+    h2 {
+      text-align: center;
+      margin-bottom: 15px;
+      color: #2e7d32;
+    }
+    .messages {
+      height: 350px;
+      overflow-y: auto;
+      padding: 15px;
+      border: 1px solid #ddd;
+      margin-bottom: 15px;
+      background: #fafafa;
+      border-radius: 10px;
+      scroll-behavior: smooth;
+    }
+    .user-message, .bot-message {
+      padding: 10px;
+      border-radius: 10px;
+      margin-bottom: 10px;
+      position: relative;
+      max-width: 85%;
+      word-wrap: break-word;
+    }
+    .user-message {
+      background: #c8e6c9;
+      text-align: right;
+      margin-left: auto;
+    }
+    .bot-message {
+      background: #e3f2fd;
+      text-align: left;
+      margin-right: auto;
+    }
+    .timestamp {
+      font-size: 0.75em;
+      color: #666;
+      display: block;
+      margin-top: 5px;
+    }
+    .input-area {
+      display: flex;
+      gap: 10px;
+    }
+    input[type="text"] {
+      flex: 1;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      font-size: 14px;
+    }
+    button {
+      padding: 10px 15px;
+      background: #4caf50;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+    button:hover {
+      background: #388e3c;
+    }
+    .loading {
+      font-style: italic;
+      color: #888;
+    }
+  </style>
+</head>
+<body>
+  <div class="chat-container">
+    <h2>🌾 விவசாயத்துக்கான AI உதவியாளர்</h2>
+    <div id="chat" class="messages"></div>
+    <div class="input-area">
+      <input type="text" id="userInput" placeholder="உங்கள் கேள்வியை உள்ளிடுங்கள்..." />
+      <button onclick="sendMessage()">அனுப்பு</button>
+    </div>
+  </div>
+
+  <script>
+    const chat = document.getElementById("chat");
+    const input = document.getElementById("userInput");
+
+    // Load previous chat history
+    window.onload = () => {
+      const saved = localStorage.getItem("chatHistory");
+      if (saved) chat.innerHTML = saved;
+      chat.scrollTop = chat.scrollHeight;
+    };
+
+    function addMessage(content, sender, isMarkdown = false) {
+      const msgDiv = document.createElement("div");
+      msgDiv.className = sender === "user" ? "user-message" : "bot-message";
+      msgDiv.innerHTML = (isMarkdown ? marked.parse(content) : content) +
+        `<span class="timestamp">${new Date().toLocaleTimeString()}</span>`;
+      chat.appendChild(msgDiv);
+      chat.scrollTop = chat.scrollHeight;
+      localStorage.setItem("chatHistory", chat.innerHTML);
+    }
+
+    async function sendMessage() {
+      const question = input.value.trim();
+      if (!question) return;
+
+      addMessage(`👨‍🌾: ${question}`, "user");
+      input.value = "";
+
+      // Show "Bot is typing..."
+      const loadingMsg = document.createElement("div");
+      loadingMsg.className = "bot-message loading";
+      loadingMsg.textContent = "🤖: எழுதுகிறது...";
+      chat.appendChild(loadingMsg);
+      chat.scrollTop = chat.scrollHeight;
+
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: question })
+        });
+
+        const data = await res.json();
+        let reply = data.reply || "பதிலை பெற முடியவில்லை.";
+
+        loadingMsg.remove();
+
+        // Fallback: Auto bullet points if missing
+        if (!reply.includes("- ") && reply.includes("\n")) {
+          reply = reply
+            .split("\n")
+            .filter(line => line.trim())
+            .map(line => `- ${line}`)
+            .join("\n");
+        }
+
+        // Typing animation
+        let text = "";
+        const msgDiv = document.createElement("div");
+        msgDiv.className = "bot-message";
+        chat.appendChild(msgDiv);
+
+        for (let i = 0; i < reply.length; i++) {
+          text += reply[i];
+          msgDiv.innerHTML = `🤖: ${text}<span class="timestamp">${new Date().toLocaleTimeString()}</span>`;
+          chat.scrollTop = chat.scrollHeight;
+          await new Promise(r => setTimeout(r, 15));
+        }
+
+        // Render Markdown after typing
+        msgDiv.innerHTML = marked.parse("🤖: " + reply) +
+          `<span class="timestamp">${new Date().toLocaleTimeString()}</span>`;
+
+        localStorage.setItem("chatHistory", chat.innerHTML);
+        chat.scrollTop = chat.scrollHeight;
+
+      } catch (error) {
+        loadingMsg.remove();
+        addMessage("⚠️ பிழை ஏற்பட்டது. இணைய இணைப்பை சரிபார்க்கவும்.", "bot");
+      }
+    }
+
+    // Send on Enter
+    input.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") sendMessage();
+    });
+  </script>
+</body>
+</html>
